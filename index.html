@@ -557,6 +557,35 @@
   .upload-area p { font-size: 0.85rem; color: var(--gray-500); margin-top: 8px; }
   .upload-preview { max-width: 200px; border-radius: 8px; margin-top: 12px; }
 
+  /* ── FULL-SCREEN LOADER ──────────────────── */
+  .page-loader {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(13,27,62,0.50);
+    z-index: 500;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 16px;
+    backdrop-filter: blur(2px);
+  }
+  .page-loader.active { display: flex; }
+  .page-loader .loader-spinner {
+    width: 52px; height: 52px;
+    border: 5px solid rgba(255,255,255,0.15);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin 0.75s linear infinite;
+  }
+  .page-loader .loader-msg {
+    color: var(--white);
+    font-size: 0.95rem;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    text-align: center;
+  }
+  #searchCardViewer { margin-top: 20px; }
   /* ── RESPONSIVE TWEAKS ───────────────────── */
   @media(max-width:540px) {
     .login-card { padding: 36px 24px; }
@@ -566,10 +595,18 @@
     table { font-size: 0.82rem; }
     thead th, tbody td { padding: 9px 10px; }
     .btn { padding: 10px 16px; }
+    .btn-view-card { display: inline-flex !important; min-width: 90px; }
   }
+    gap: 16px;
 </style>
 </head>
 <body>
+
+<!-- PAGE LOADER OVERLAY -->
+<div class="page-loader" id="pageLoader">
+  <div class="loader-spinner"></div>
+  <div class="loader-msg" id="loaderMsg">Please wait...</div>
+</div>
 
 <!-- ═══════════════════════════════════════════
      LOGIN PAGE
@@ -629,70 +666,40 @@
   <div class="app-wrapper">
     <!-- NAV TABS -->
     <nav class="nav-tabs" id="navTabs">
-      <button class="nav-tab active" onclick="showTab('lookup')" id="tab-lookup">
-        <span class="tab-icon">🔍</span> ID Lookup
-      </button>
-      <button class="nav-tab" onclick="showTab('search')" id="tab-search">
-        <span class="tab-icon">👤</span> Search Members
+      <button class="nav-tab active" onclick="showTab('search')" id="tab-search">
+        <span class="tab-icon">🔍</span> Search Members
       </button>
       <button class="nav-tab" id="tab-admin" onclick="showTab('admin')" style="display:none;">
         <span class="tab-icon">⚙️</span> Admin
       </button>
     </nav>
 
-    <!-- ── TAB: ID LOOKUP ─────────────────────── -->
-    <div id="pane-lookup">
-      <div class="card">
-        <div class="card-title">ID Card Lookup</div>
-        <div class="card-desc">Enter a Member ID number to fetch and display the ID Card.</div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Member ID Number</label>
-            <input type="text" id="lookupIdNo" placeholder="e.g. GOA-00123" onkeydown="if(event.key==='Enter') fetchCard()">
-          </div>
-        </div>
-        <button class="btn btn-primary" onclick="fetchCard()" id="btnFetchCard">
-          🪪 Fetch ID Card
-        </button>
-      </div>
-
-      <div id="cardViewerArea" style="margin-top:20px; display:none;">
-        <div class="card card-viewer-wrap">
-          <div class="card-title" id="cardHolderName" style="margin-bottom:16px;"></div>
-          <div id="cardImgContainer">
-            <div class="id-card-placeholder">
-              <div class="ph-icon">🪪</div>
-              <p>Loading card...</p>
-            </div>
-          </div>
-          <div class="card-actions" style="margin-top:20px;">
-            <button class="btn btn-gold" id="btnDownloadCard">⬇ Download Card</button>
-            <button class="btn btn-outline" onclick="clearLookup()">✕ Close</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── TAB: SEARCH ────────────────────────── -->
-    <div id="pane-search" style="display:none;">
+    <!-- ── TAB: SEARCH (merged with ID Lookup) ── -->
+    <div id="pane-search">
       <div class="card">
         <div class="card-title">Search Members</div>
-        <div class="card-desc">Search by First Name, Middle Name, Surname, or Mobile Number. Partial matches are supported.</div>
+        <div class="card-desc">Search by Member ID, Name, or Mobile Number. Partial matches supported.</div>
         <div class="form-row">
+          <div class="form-group">
+            <label>Member ID No</label>
+            <input type="text" id="srchIdNo" placeholder="e.g. GOA-00123" onkeydown="if(event.key==='Enter') doSearch()">
+          </div>
           <div class="form-group">
             <label>First Name</label>
             <input type="text" id="srchFirst" placeholder="e.g. Maria" onkeydown="if(event.key==='Enter') doSearch()">
           </div>
+        </div>
+        <div class="form-row">
           <div class="form-group">
             <label>Middle Name</label>
             <input type="text" id="srchMiddle" placeholder="e.g. Grace">
           </div>
-        </div>
-        <div class="form-row">
           <div class="form-group">
             <label>Surname</label>
             <input type="text" id="srchSurname" placeholder="e.g. Fernandes">
           </div>
+        </div>
+        <div class="form-row">
           <div class="form-group">
             <label>Mobile Number</label>
             <input type="tel" id="srchMobile" placeholder="e.g. 9876543210">
@@ -704,6 +711,7 @@
         </div>
       </div>
 
+      <!-- RESULTS LIST -->
       <div id="searchResults" style="display:none; margin-top:20px;">
         <div class="card">
           <div class="results-header">
@@ -723,6 +731,26 @@
               </thead>
               <tbody id="searchTableBody"></tbody>
             </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- CARD VIEWER (shown inline after View Card click) -->
+      <div id="searchCardViewer" style="display:none;">
+        <div class="card card-viewer-wrap">
+          <div class="card-title" id="cardHolderName" style="margin-bottom:16px;"></div>
+          <div id="cardImgContainer">
+            <div class="id-card-placeholder">
+              <div class="ph-icon">🪪</div>
+              <p>Loading card...</p>
+            </div>
+          </div>
+          <div class="card-actions" style="margin-top:20px;">
+            <button class="btn btn-outline btn-share" id="btnShareCard" style="background:var(--navy);color:var(--gold);border-color:var(--navy);">
+              📤 Share
+            </button>
+            <button class="btn btn-gold" id="btnDownloadCard">⬇ Download</button>
+            <button class="btn btn-outline" onclick="closeCardViewer()">✕ Close</button>
           </div>
         </div>
       </div>
@@ -936,6 +964,7 @@ async function handleCredentialResponse(response) {
   appState.idToken = idToken;
 
   // Check access via Apps Script
+  showLoader('Verifying access...');
   try {
     const res = await apiCall('checkAccess', { email: payload.email });
     if (res.allowed) {
@@ -943,11 +972,14 @@ async function handleCredentialResponse(response) {
       sessionStorage.setItem('goa_token', idToken);
       sessionStorage.setItem('goa_user',  JSON.stringify(appState.user));
       sessionStorage.setItem('goa_role',  res.role);
+      hideLoader();
       showApp();
     } else {
+      hideLoader();
       showAccessDenied();
     }
   } catch(e) {
+    hideLoader();
     toast('Error checking access. Please try again.', 'error');
     console.error(e);
   }
@@ -962,6 +994,9 @@ function showApp() {
   const u = appState.user;
   document.getElementById('userDisplayName').textContent = u.name.split(' ')[0];
   document.getElementById('userInitials').textContent    = u.name.charAt(0).toUpperCase();
+
+  // Default to search tab
+  showTab('search');
 
   // Show admin tab if admin
   if (appState.role === 'admin') {
@@ -1017,7 +1052,7 @@ async function apiPost(action, body = {}) {
    TAB NAVIGATION
 ══════════════════════════════════════════════════════════════ */
 function showTab(tab) {
-  ['lookup','search','admin'].forEach(t => {
+  ['search','admin'].forEach(t => {
     document.getElementById('pane-' + t).style.display = (t === tab) ? 'block' : 'none';
     document.getElementById('tab-'  + t)?.classList.toggle('active', t === tab);
   });
@@ -1025,15 +1060,66 @@ function showTab(tab) {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   ID LOOKUP
+   LOADER HELPERS
 ══════════════════════════════════════════════════════════════ */
-async function fetchCard() {
-  const idNo = document.getElementById('lookupIdNo').value.trim();
-  if (!idNo) { toast('Please enter a Member ID No.', 'error'); return; }
+function showLoader(msg) {
+  document.getElementById('loaderMsg').textContent = msg || 'Please wait...';
+  document.getElementById('pageLoader').classList.add('active');
+}
+function hideLoader() {
+  document.getElementById('pageLoader').classList.remove('active');
+}
 
-  setLoading('btnFetchCard', true, '🔄 Fetching...');
-  document.getElementById('cardViewerArea').style.display = 'none';
+/* ══════════════════════════════════════════════════════════════
+   MEMBER SEARCH + CARD VIEWER (unified)
+══════════════════════════════════════════════════════════════ */
+async function doSearch() {
+  const idNo    = document.getElementById('srchIdNo').value.trim();
+  const first   = document.getElementById('srchFirst').value.trim();
+  const middle  = document.getElementById('srchMiddle').value.trim();
+  const surname = document.getElementById('srchSurname').value.trim();
+  const mobile  = document.getElementById('srchMobile').value.trim();
 
+  if (!idNo && !first && !middle && !surname && !mobile) {
+    toast('Please enter at least one search field.', 'error');
+    return;
+  }
+
+  // If IDNo is provided directly, fetch card immediately
+  if (idNo && !first && !middle && !surname && !mobile) {
+    await fetchCardById(idNo);
+    return;
+  }
+
+  // Hide card viewer, show spinner in results
+  document.getElementById('searchCardViewer').style.display = 'none';
+  setLoading('btnSearch', true, '🔄 Searching...');
+  const tbody = document.getElementById('searchTableBody');
+  tbody.innerHTML = '<tr class="loading-row"><td colspan="5"><div class="spinner"></div></td></tr>';
+  document.getElementById('searchResults').style.display = 'block';
+  showLoader('Searching members...');
+
+  try {
+    const data = await apiCall('searchMembers', { idNo, first, middle, surname, mobile });
+    renderSearchResults(data.results || []);
+    // Scroll results into view
+    setTimeout(() => {
+      document.getElementById('searchResults').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  } catch(e) {
+    toast('Search failed. Check configuration.', 'error');
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--red);padding:24px;">Error loading results.</td></tr>';
+    console.error(e);
+  } finally {
+    setLoading('btnSearch', false, '🔍 Search');
+    hideLoader();
+  }
+}
+
+async function fetchCardById(idNo) {
+  document.getElementById('searchCardViewer').style.display = 'none';
+  document.getElementById('searchResults').style.display    = 'none';
+  showLoader('Fetching ID Card...');
   try {
     const data = await apiCall('getCard', { idNo });
     if (!data.found) {
@@ -1045,65 +1131,7 @@ async function fetchCard() {
     toast('Error fetching card. Check configuration.', 'error');
     console.error(e);
   } finally {
-    setLoading('btnFetchCard', false, '🪪 Fetch ID Card');
-  }
-}
-
-function displayCard(data) {
-  document.getElementById('cardHolderName').textContent =
-    data.firstName + (data.middleName ? ' ' + data.middleName : '') + ' ' + data.surname;
-
-  const imgSrc = driveImageUrl(data.driveFileId);
-  const container = document.getElementById('cardImgContainer');
-  container.innerHTML = `<img class="id-card-img" src="${imgSrc}" alt="ID Card"
-    onerror="this.parentElement.innerHTML='<div class=id-card-placeholder><div class=ph-icon>⚠️</div><p>Card image could not be loaded. Check Drive permissions.</p></div>'">`;
-
-  document.getElementById('btnDownloadCard').onclick = () => {
-    window.open(`https://drive.google.com/uc?export=download&id=${data.driveFileId}`, '_blank');
-  };
-
-  document.getElementById('cardViewerArea').style.display = 'block';
-  document.getElementById('cardViewerArea').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-function driveImageUrl(fileId) {
-  // Using the thumbnail endpoint for inline display
-  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
-}
-
-function clearLookup() {
-  document.getElementById('lookupIdNo').value = '';
-  document.getElementById('cardViewerArea').style.display = 'none';
-}
-
-/* ══════════════════════════════════════════════════════════════
-   MEMBER SEARCH
-══════════════════════════════════════════════════════════════ */
-async function doSearch() {
-  const first   = document.getElementById('srchFirst').value.trim();
-  const middle  = document.getElementById('srchMiddle').value.trim();
-  const surname = document.getElementById('srchSurname').value.trim();
-  const mobile  = document.getElementById('srchMobile').value.trim();
-
-  if (!first && !middle && !surname && !mobile) {
-    toast('Please enter at least one search field.', 'error');
-    return;
-  }
-
-  setLoading('btnSearch', true, '🔄 Searching...');
-  const tbody = document.getElementById('searchTableBody');
-  tbody.innerHTML = '<tr class="loading-row"><td colspan="5"><div class="spinner"></div></td></tr>';
-  document.getElementById('searchResults').style.display = 'block';
-
-  try {
-    const data = await apiCall('searchMembers', { first, middle, surname, mobile });
-    renderSearchResults(data.results || []);
-  } catch(e) {
-    toast('Search failed. Check configuration.', 'error');
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--red);padding:24px;">Error loading results.</td></tr>';
-    console.error(e);
-  } finally {
-    setLoading('btnSearch', false, '🔍 Search');
+    hideLoader();
   }
 }
 
@@ -1124,7 +1152,9 @@ function renderSearchResults(rows) {
       <td>${esc(r.mobile)}</td>
       <td><span class="status-badge status-${r.status === 'Active' ? 'active' : 'inactive'}">${esc(r.status)}</span></td>
       <td>
-        <button class="btn btn-primary btn-sm" onclick='viewCardFromSearch(${JSON.stringify(r)})'>
+        <button class="btn btn-primary btn-sm btn-view-card"
+          style="white-space:nowrap;"
+          onclick='viewCardFromSearch(${JSON.stringify(r)})'>
           🪪 View Card
         </button>
       </td>
@@ -1133,16 +1163,108 @@ function renderSearchResults(rows) {
 }
 
 function viewCardFromSearch(row) {
-  document.getElementById('lookupIdNo').value = row.idNo;
-  showTab('lookup');
-  displayCard(row);
+  // Hide results, show card viewer below
+  document.getElementById('searchResults').style.display = 'none';
+  showLoader('Loading ID Card...');
+  // Small delay to let loader appear before image load
+  setTimeout(() => {
+    displayCard(row);
+    hideLoader();
+    document.getElementById('searchCardViewer').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 300);
+}
+
+function displayCard(data) {
+  document.getElementById('cardHolderName').textContent =
+    data.firstName + (data.middleName ? ' ' + data.middleName : '') + ' ' + data.surname;
+
+  const imgSrc = driveImageUrl(data.driveFileId);
+  const container = document.getElementById('cardImgContainer');
+  container.innerHTML = `<img class="id-card-img" src="${imgSrc}" alt="ID Card"
+    onload="hideLoader()"
+    onerror="hideLoader();this.parentElement.innerHTML='<div class=id-card-placeholder><div class=ph-icon>⚠️</div><p>Card image could not be loaded. Check Drive permissions.</p></div>'">`;
+
+  // Download button
+  document.getElementById('btnDownloadCard').onclick = () => {
+    window.open(`https://drive.google.com/uc?export=download&id=${data.driveFileId}`, '_blank');
+  };
+
+  // Share button — uses Web Share API to share image (WhatsApp, Gmail, etc.)
+  document.getElementById('btnShareCard').onclick = async () => {
+    await shareCard(data);
+  };
+
+  document.getElementById('searchCardViewer').style.display = 'block';
+}
+
+async function shareCard(data) {
+  const imgUrl = driveImageUrl(data.driveFileId);
+  const memberName = data.firstName + (data.middleName ? ' ' + data.middleName : '') + ' ' + data.surname;
+  const shareTitle = 'GOA Member ID Card — ' + memberName;
+  const shareText  = 'GOA Member ID: ' + data.idNo + '\n' + memberName;
+
+  // Try Web Share API with image blob (works on Android Chrome, iOS Safari)
+  if (navigator.share) {
+    showLoader('Preparing to share...');
+    try {
+      const response = await fetch(imgUrl);
+      const blob     = await response.blob();
+      const file     = new File([blob], data.idNo + '.jpg', { type: blob.type || 'image/jpeg' });
+
+      // Check if files sharing is supported
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          title : shareTitle,
+          text  : shareText,
+          files : [file],
+        });
+      } else {
+        // Fall back to sharing the Drive link
+        await navigator.share({
+          title : shareTitle,
+          text  : shareText,
+          url   : `https://drive.google.com/file/d/${data.driveFileId}/view`,
+        });
+      }
+    } catch(e) {
+      if (e.name !== 'AbortError') {
+        toast('Could not share. Try Download instead.', 'error');
+        console.error(e);
+      }
+    } finally {
+      hideLoader();
+    }
+  } else {
+    // Desktop fallback — copy Drive link to clipboard
+    try {
+      await navigator.clipboard.writeText(
+        `https://drive.google.com/file/d/${data.driveFileId}/view`
+      );
+      toast('Share link copied to clipboard!', 'success');
+    } catch(e) {
+      toast('Share not supported on this browser. Use Download instead.', 'error');
+    }
+  }
+}
+
+function driveImageUrl(fileId) {
+  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
+}
+
+function closeCardViewer() {
+  document.getElementById('searchCardViewer').style.display = 'none';
+  document.getElementById('searchResults').style.display    = 'block';
+  setTimeout(() => {
+    document.getElementById('searchResults').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 80);
 }
 
 function clearSearch() {
-  ['srchFirst','srchMiddle','srchSurname','srchMobile'].forEach(id => {
+  ['srchIdNo','srchFirst','srchMiddle','srchSurname','srchMobile'].forEach(id => {
     document.getElementById(id).value = '';
   });
-  document.getElementById('searchResults').style.display = 'none';
+  document.getElementById('searchResults').style.display    = 'none';
+  document.getElementById('searchCardViewer').style.display = 'none';
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -1159,6 +1281,7 @@ async function loadAdminStats() {
 async function loadAdminTable() {
   const tbody = document.getElementById('adminTableBody');
   tbody.innerHTML = '<tr class="loading-row"><td colspan="6"><div class="spinner"></div></td></tr>';
+  showLoader('Loading members...');
 
   try {
     const data = await apiCall('getAllMembers');
@@ -1171,6 +1294,8 @@ async function loadAdminTable() {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--red);padding:24px;">Error loading members.</td></tr>';
     toast('Error loading member list.', 'error');
     console.error(e);
+  } finally {
+    hideLoader();
   }
 }
 
@@ -1241,6 +1366,7 @@ async function saveMember() {
   }
 
   setLoading('btnSaveMember', true, '💾 Saving...');
+  showLoader('Saving member...');
   const payload = {
     idNo, firstName: first,
     middleName : document.getElementById('mMiddle').value.trim(),
@@ -1267,6 +1393,7 @@ async function saveMember() {
     console.error(e);
   } finally {
     setLoading('btnSaveMember', false, '💾 Save Member');
+    hideLoader();
   }
 }
 
