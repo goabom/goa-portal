@@ -676,7 +676,7 @@
 
     <!-- ── TAB: SEARCH (merged with ID Lookup) ── -->
     <div id="pane-search">
-      <div class="card">
+      <div class="card" id="searchFormCard">
         <div class="card-title">Search Members</div>
         <div class="card-desc">Search by Member ID, Name, or Mobile Number. Partial matches supported.</div>
         <div class="form-row">
@@ -722,10 +722,8 @@
             <table>
               <thead>
                 <tr>
-                  <th>ID No</th>
                   <th>Full Name</th>
-                  <th>Mobile</th>
-                  <th>Status</th>
+                  <th>ID No / Mobile</th>
                   <th>Action</th>
                 </tr>
               </thead>
@@ -1147,10 +1145,11 @@ function renderSearchResults(rows) {
 
   tbody.innerHTML = rows.map(r => `
     <tr>
-      <td><span class="id-badge">${esc(r.idNo)}</span></td>
-      <td>${esc(r.firstName)} ${esc(r.middleName || '')} ${esc(r.surname)}</td>
-      <td>${esc(r.mobile)}</td>
-      <td><span class="status-badge status-${r.status === 'Active' ? 'active' : 'inactive'}">${esc(r.status)}</span></td>
+      <td style="font-weight:500;">${esc(r.firstName)} ${esc(r.middleName || '')} ${esc(r.surname)}</td>
+      <td>
+        <span class="id-badge">${esc(r.idNo)}</span>
+        <div style="margin-top:4px;font-size:0.8rem;color:var(--gray-500);">${esc(r.mobile)}</div>
+      </td>
       <td>
         <button class="btn btn-primary btn-sm btn-view-card"
           style="white-space:nowrap;"
@@ -1163,10 +1162,10 @@ function renderSearchResults(rows) {
 }
 
 function viewCardFromSearch(row) {
-  // Hide results, show card viewer below
-  document.getElementById('searchResults').style.display = 'none';
+  // Collapse search form, hide results, show card viewer
+  document.getElementById('searchFormCard').style.display = 'none';
+  document.getElementById('searchResults').style.display  = 'none';
   showLoader('Loading ID Card...');
-  // Small delay to let loader appear before image load
   setTimeout(() => {
     displayCard(row);
     hideLoader();
@@ -1198,52 +1197,118 @@ function displayCard(data) {
 }
 
 async function shareCard(data) {
-  const imgUrl = driveImageUrl(data.driveFileId);
   const memberName = data.firstName + (data.middleName ? ' ' + data.middleName : '') + ' ' + data.surname;
   const shareTitle = 'GOA Member ID Card — ' + memberName;
-  const shareText  = 'GOA Member ID: ' + data.idNo + '\n' + memberName;
+  const shareText  = 'GOA Member ID: ' + data.idNo + ', ' + memberName;
+  const driveLink  = `https://drive.google.com/file/d/${data.driveFileId}/view`;
 
-  // Try Web Share API with image blob (works on Android Chrome, iOS Safari)
+  // ── Helper: read the already-rendered <img> via canvas → blob ───────────────
+  // This avoids CORS fetch errors since the image is already in the DOM.
+  function imgToBlob() {
+    return new Promise((resolve, reject) => {
+      const img = document.querySelector('#cardImgContainer img');
+      if (!img || !img.complete || img.naturalWidth === 0) {
+        return reject(new Error('Image not loaded'));
+      }
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width  = img.naturalWidth  || img.width;
+        canvas.height = img.naturalHeight || img.height;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Canvas export failed')), 'image/jpeg', 0.92);
+      } catch(e) {
+        reject(e);  // tainted canvas (still CORS) — caught below
+      }
+    });
+  }
+
+  // ── Web Share API path (mobile: WhatsApp, Gmail, Messages etc.) ─────────────
   if (navigator.share) {
     showLoader('Preparing to share...');
     try {
-      const response = await fetch(imgUrl);
-      const blob     = await response.blob();
-      const file     = new File([blob], data.idNo + '.jpg', { type: blob.type || 'image/jpeg' });
-
-      // Check if files sharing is supported
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          title : shareTitle,
-          text  : shareText,
-          files : [file],
-        });
-      } else {
-        // Fall back to sharing the Drive link
-        await navigator.share({
-          title : shareTitle,
-          text  : shareText,
-          url   : `https://drive.google.com/file/d/${data.driveFileId}/view`,
-        });
+      // Attempt 1: share as image file from canvas
+      let shared = false;
+      try {
+        const blob = await imgToBlob();
+        const file = new File([blob], data.idNo + '.jpg', { type: 'image/jpeg' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ title: shareTitle, text: shareText, files: [file] });
+          shared = true;
+        }
+      } catch(canvasErr) {
+        console.warn('Canvas share failed, trying link share:', canvasErr.message);
       }
+
+      // Attempt 2: share as URL (still opens WhatsApp/Gmail with a link)
+      if (!shared) {
+        await navigator.share({ title: shareTitle, text: shareText, url: driveLink });
+      }
+
     } catch(e) {
       if (e.name !== 'AbortError') {
-        toast('Could not share. Try Download instead.', 'error');
-        console.error(e);
+        // User cancelled is AbortError — anything else show fallback UI
+        showShareFallback(data.idNo, driveLink, shareText);
       }
     } finally {
       hideLoader();
     }
+
   } else {
-    // Desktop fallback — copy Drive link to clipboard
-    try {
-      await navigator.clipboard.writeText(
-        `https://drive.google.com/file/d/${data.driveFileId}/view`
-      );
-      toast('Share link copied to clipboard!', 'success');
-    } catch(e) {
-      toast('Share not supported on this browser. Use Download instead.', 'error');
-    }
+    // ── Desktop fallback: show a small share panel ───────────────────────────
+    showShareFallback(data.idNo, driveLink, shareText);
+  }
+}
+
+function showShareFallback(idNo, driveLink, shareText) {
+  // Build WhatsApp + Gmail links, plus copy-to-clipboard
+  const waText  = encodeURIComponent(shareText + '\n' + driveLink);
+  const gmailUrl = 'https://mail.google.com/mail/?view=cm&su=' +
+    encodeURIComponent('GOA Member ID Card') + '&body=' + encodeURIComponent(shareText + '\n' + driveLink);
+
+  // Show a mini share overlay inside the card-actions area
+  const existing = document.getElementById('sharePanel');
+  if (existing) { existing.remove(); return; } // toggle off
+
+  const panel = document.createElement('div');
+  panel.id = 'sharePanel';
+  panel.style.cssText = `
+    background:var(--navy); border-radius:var(--radius-sm); padding:14px 16px;
+    margin-top:12px; display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+    animation: fadeUp 0.25s ease;
+  `;
+  panel.innerHTML = `
+    <span style="color:var(--gold-light);font-size:0.82rem;font-weight:600;width:100%;">Share via:</span>
+    <a href="https://wa.me/?text=${waText}" target="_blank" rel="noopener"
+       style="background:#25D366;color:#fff;padding:8px 14px;border-radius:8px;font-size:0.85rem;
+              font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
+      📱 WhatsApp
+    </a>
+    <a href="${gmailUrl}" target="_blank" rel="noopener"
+       style="background:#EA4335;color:#fff;padding:8px 14px;border-radius:8px;font-size:0.85rem;
+              font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
+      ✉️ Gmail
+    </a>
+    <button onclick="copyShareLink('${driveLink}')"
+       style="background:var(--gold);color:var(--navy);padding:8px 14px;border-radius:8px;
+              font-size:0.85rem;font-weight:600;border:none;cursor:pointer;
+              display:inline-flex;align-items:center;gap:6px;">
+      🔗 Copy Link
+    </button>
+    <button onclick="document.getElementById('sharePanel').remove()"
+       style="background:transparent;color:var(--gray-300);border:none;cursor:pointer;
+              margin-left:auto;font-size:1.1rem;line-height:1;">✕</button>
+  `;
+  // Insert below the card-actions buttons
+  const actions = document.querySelector('#searchCardViewer .card-actions');
+  actions.insertAdjacentElement('afterend', panel);
+}
+
+async function copyShareLink(url) {
+  try {
+    await navigator.clipboard.writeText(url);
+    toast('Link copied to clipboard!', 'success');
+  } catch(e) {
+    toast('Could not copy. Please copy the link manually.', 'error');
   }
 }
 
@@ -1253,6 +1318,7 @@ function driveImageUrl(fileId) {
 
 function closeCardViewer() {
   document.getElementById('searchCardViewer').style.display = 'none';
+  document.getElementById('searchFormCard').style.display   = 'block';
   document.getElementById('searchResults').style.display    = 'block';
   setTimeout(() => {
     document.getElementById('searchResults').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1265,6 +1331,7 @@ function clearSearch() {
   });
   document.getElementById('searchResults').style.display    = 'none';
   document.getElementById('searchCardViewer').style.display = 'none';
+  document.getElementById('searchFormCard').style.display   = 'block';
 }
 
 /* ══════════════════════════════════════════════════════════════
