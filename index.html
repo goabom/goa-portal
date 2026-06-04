@@ -559,43 +559,33 @@
 
   /* ── FULL-SCREEN LOADER ──────────────────── */
   .page-loader {
-    display: none; position: fixed; inset: 0;
-    background: rgba(13,27,62,0.50); z-index: 500;
-    align-items: center; justify-content: center;
-    flex-direction: column; gap: 16px; backdrop-filter: blur(2px);
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(13,27,62,0.50);
+    z-index: 500;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 16px;
+    backdrop-filter: blur(2px);
   }
   .page-loader.active { display: flex; }
   .page-loader .loader-spinner {
     width: 52px; height: 52px;
     border: 5px solid rgba(255,255,255,0.15);
-    border-top-color: var(--gold); border-radius: 50%;
+    border-top-color: var(--gold);
+    border-radius: 50%;
     animation: spin 0.75s linear infinite;
   }
   .page-loader .loader-msg {
-    color: var(--white); font-size: 0.95rem; font-weight: 500;
-    letter-spacing: 0.03em; text-align: center;
+    color: var(--white);
+    font-size: 0.95rem;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    text-align: center;
   }
-  /* Card viewer inline in search pane */
   #searchCardViewer { margin-top: 20px; }
-  /* Share panel */
-  .share-panel {
-    background: var(--navy); border-radius: var(--radius-sm);
-    padding: 14px 16px; margin-top: 12px;
-    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
-    animation: fadeUp 0.25s ease;
-  }
-  .share-panel-label { color: var(--gold-light); font-size: 0.82rem; font-weight: 600; width: 100%; }
-  .share-btn-wa   { background:#25D366; color:#fff; padding:8px 14px; border-radius:8px;
-                    font-size:0.85rem; font-weight:600; text-decoration:none;
-                    display:inline-flex; align-items:center; gap:6px; }
-  .share-btn-gm   { background:#EA4335; color:#fff; padding:8px 14px; border-radius:8px;
-                    font-size:0.85rem; font-weight:600; text-decoration:none;
-                    display:inline-flex; align-items:center; gap:6px; }
-  .share-btn-copy { background:var(--gold); color:var(--navy); padding:8px 14px; border-radius:8px;
-                    font-size:0.85rem; font-weight:600; border:none; cursor:pointer;
-                    display:inline-flex; align-items:center; gap:6px; font-family:inherit; }
-  .share-btn-close { background:transparent; color:var(--gray-300); border:none; cursor:pointer;
-                     margin-left:auto; font-size:1.2rem; line-height:1; }
   /* ── RESPONSIVE TWEAKS ───────────────────── */
   @media(max-width:540px) {
     .login-card { padding: 36px 24px; }
@@ -607,6 +597,7 @@
     .btn { padding: 10px 16px; }
     .btn-view-card { display: inline-flex !important; min-width: 90px; }
   }
+    gap: 16px;
 </style>
 </head>
 <body>
@@ -626,15 +617,8 @@
     <div class="login-org">Goan Outreach Association</div>
     <div class="login-subtitle">Member ID Card Portal<br>Sign in with your Google account to continue.</div>
     <div class="divider">SECURE ACCESS</div>
-    <button class="btn-google" onclick="signIn()">
-      <svg width="20" height="20" viewBox="0 0 24 24">
-        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-      </svg>
-      Sign in with Google
-    </button>
+    <!-- Google renders its official Sign-In button here (avoids 403 from custom buttons) -->
+    <div id="googleBtnContainer" style="display:flex; justify-content:center; min-height:44px;"></div>
     <div class="login-footer">
       Access restricted to <strong>authorised GOA members</strong> only.
     </div>
@@ -690,17 +674,15 @@
       </button>
     </nav>
 
-    <!-- ── TAB: SEARCH (includes ID lookup + card viewer) ── -->
+    <!-- ── TAB: SEARCH (merged with ID Lookup) ── -->
     <div id="pane-search">
-
-      <!-- SEARCH FORM (collapsible) -->
-      <div class="card" id="searchFormCard">
+      <div class="card">
         <div class="card-title">Search Members</div>
         <div class="card-desc">Search by Member ID, Name, or Mobile Number. Partial matches supported.</div>
         <div class="form-row">
           <div class="form-group">
             <label>Member ID No</label>
-            <input type="text" id="srchIdNo" placeholder="e.g. GOA-00123" onkeydown="if(event.key==='Enter') doSearch()">
+            <input type="text" id="srchIdNo" placeholder="e.g. DM0550001" onkeydown="if(event.key==='Enter') doSearch()">
           </div>
           <div class="form-group">
             <label>First Name</label>
@@ -740,8 +722,10 @@
             <table>
               <thead>
                 <tr>
+                  <th>ID No</th>
                   <th>Full Name</th>
-                  <th>ID No / Mobile</th>
+                  <th>Mobile</th>
+                  <th>Status</th>
                   <th>Action</th>
                 </tr>
               </thead>
@@ -751,7 +735,7 @@
         </div>
       </div>
 
-      <!-- CARD VIEWER (shown after View Card, collapses search form) -->
+      <!-- CARD VIEWER (shown inline after View Card click) -->
       <div id="searchCardViewer" style="display:none;">
         <div class="card card-viewer-wrap">
           <div class="card-title" id="cardHolderName" style="margin-bottom:16px;"></div>
@@ -761,12 +745,8 @@
               <p>Loading card...</p>
             </div>
           </div>
-          <div class="card-actions" style="margin-top:20px;" id="cardActionBar">
-            <button class="btn btn-primary" id="btnCopyCard">
-              📋 Copy
-            </button>
-            <button class="btn" id="btnShareCard"
-              style="background:var(--navy);color:var(--gold);border:1.5px solid var(--navy);">
+          <div class="card-actions" style="margin-top:20px;">
+            <button class="btn btn-outline btn-share" id="btnShareCard" style="background:var(--navy);color:var(--gold);border-color:var(--navy);">
               📤 Share
             </button>
             <button class="btn btn-gold" id="btnDownloadCard">⬇ Download</button>
@@ -926,15 +906,7 @@ let appState = {
    AUTH
 ══════════════════════════════════════════════════════════════ */
 window.onload = () => {
-  // Initialize Google Identity Services
-  if (typeof google !== 'undefined') {
-    google.accounts.id.initialize({
-      client_id: CONFIG.GOOGLE_CLIENT_ID,
-      callback: handleCredentialResponse,
-      auto_select: false,
-    });
-  }
-  // Check for returning session
+  // Check for returning session first
   const savedToken = sessionStorage.getItem('goa_token');
   const savedUser  = sessionStorage.getItem('goa_user');
   const savedRole  = sessionStorage.getItem('goa_role');
@@ -943,14 +915,43 @@ window.onload = () => {
     appState.user    = JSON.parse(savedUser);
     appState.role    = savedRole;
     showApp();
+    return;
   }
+  // Render the Google Sign-In button (more reliable than prompt())
+  renderGoogleButton();
 };
 
+function renderGoogleButton() {
+  // Wait for GSI library to load, then render button into the placeholder div
+  if (typeof google === 'undefined') {
+    setTimeout(renderGoogleButton, 200);
+    return;
+  }
+  google.accounts.id.initialize({
+    client_id: CONFIG.GOOGLE_CLIENT_ID,
+    callback : handleCredentialResponse,
+    ux_mode  : 'popup',            // explicit popup — avoids One Tap 403 issues
+    auto_select: false,
+  });
+  // Render official Google button into #googleBtnContainer
+  google.accounts.id.renderButton(
+    document.getElementById('googleBtnContainer'),
+    {
+      type : 'standard',
+      theme: 'outline',
+      size : 'large',
+      text : 'signin_with',
+      shape: 'rectangular',
+      width: 320,
+    }
+  );
+}
+
+// Legacy fallback — kept for safety but renderButton is preferred
 function signIn() {
   if (typeof google !== 'undefined') {
     google.accounts.id.prompt();
   } else {
-    // Fallback for local testing without GSI loaded
     toast('Google Sign-In not available. Check your Client ID configuration.', 'error');
   }
 }
@@ -994,7 +995,9 @@ function showApp() {
   document.getElementById('userDisplayName').textContent = u.name.split(' ')[0];
   document.getElementById('userInitials').textContent    = u.name.charAt(0).toUpperCase();
 
+  // Default to search tab
   showTab('search');
+
   // Show admin tab if admin
   if (appState.role === 'admin') {
     document.getElementById('tab-admin').style.display = 'flex';
@@ -1022,23 +1025,23 @@ function signOut() {
 async function apiCall(action, params = {}) {
   const url = new URL(CONFIG.APPS_SCRIPT_URL);
   url.searchParams.set('action', action);
+  // Pass email as URL param — Apps Script strips Authorization headers
+  if (appState.user?.email) url.searchParams.set('email', appState.user.email);
   Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, v));
 
-  const res = await fetch(url.toString(), {
-    method: 'GET',
-    headers: { 'Authorization': 'Bearer ' + appState.idToken },
-  });
+  const res = await fetch(url.toString(), { method: 'GET' });
   if (!res.ok) throw new Error('API error: ' + res.status);
   return res.json();
 }
 
 async function apiPost(action, body = {}) {
-  const res = await fetch(CONFIG.APPS_SCRIPT_URL + '?action=' + action, {
+  // Include email in query string — Apps Script strips request headers
+  const url = CONFIG.APPS_SCRIPT_URL + '?action=' + action +
+    (appState.user?.email ? '&email=' + encodeURIComponent(appState.user.email) : '');
+
+  const res = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + appState.idToken,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error('API error: ' + res.status);
@@ -1067,76 +1070,8 @@ function hideLoader() {
   document.getElementById('pageLoader').classList.remove('active');
 }
 
-
-function displayCard(data) {
-  document.getElementById('cardHolderName').textContent =
-    data.firstName + (data.middleName ? ' ' + data.middleName : '') + ' ' + data.surname;
-
-  const imgSrc = driveImageUrl(data.driveFileId);
-  const container = document.getElementById('cardImgContainer');
-  // Add crossOrigin to try CORS-allowed load (needed for canvas export)
-  container.innerHTML = `<img class="id-card-img" id="activeCardImg"
-    crossorigin="anonymous"
-    src="${imgSrc}" alt="ID Card"
-    onload="hideLoader()"
-    onerror="hideLoader();this.removeAttribute('crossorigin');this.src='${imgSrc}'">`; 
-
-  // Download
-  document.getElementById('btnDownloadCard').onclick = () => {
-    window.open(`https://drive.google.com/uc?export=download&id=${data.driveFileId}`, '_blank');
-  };
-
-  // Share
-  document.getElementById('btnShareCard').onclick = () => shareCard(data);
-
-  // Copy image to clipboard
-  document.getElementById('btnCopyCard').onclick = () => copyCardImage(data);
-
-  document.getElementById('searchCardViewer').style.display = 'block';
-}
-
-function driveImageUrl(fileId) {
-  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
-}
-
-function closeCardViewer() {
-  document.getElementById('searchCardViewer').style.display = 'none';
-  document.getElementById('searchFormCard').style.display   = 'block';
-  document.getElementById('searchResults').style.display    = 'block';
-  // Remove share panel if open
-  const sp = document.getElementById('sharePanel');
-  if (sp) sp.remove();
-  setTimeout(() => {
-    document.getElementById('searchResults').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, 80);
-}
-
-/* ── CANVAS HELPER: get image blob from DOM img ─────────────────────────────
-   Uses crossOrigin img first; if canvas is tainted, falls back to a
-   fresh fetch with no-store cache hint (avoids CORS on repeated loads).      */
-async function getCardBlob() {
-  return new Promise((resolve, reject) => {
-    const img = document.getElementById('activeCardImg');
-    if (!img || !img.complete || img.naturalWidth === 0) {
-      return reject(new Error('Image not ready'));
-    }
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width  = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      canvas.getContext('2d').drawImage(img, 0, 0);
-      canvas.toBlob(blob => {
-        if (blob) resolve(blob);
-        else reject(new Error('Canvas toBlob failed'));
-      }, 'image/jpeg', 0.93);
-    } catch(e) {
-      reject(e); // tainted canvas — caught by callers
-    }
-  });
-}
-
 /* ══════════════════════════════════════════════════════════════
-   MEMBER SEARCH
+   MEMBER SEARCH + CARD VIEWER (unified)
 ══════════════════════════════════════════════════════════════ */
 async function doSearch() {
   const idNo    = document.getElementById('srchIdNo').value.trim();
@@ -1150,25 +1085,52 @@ async function doSearch() {
     return;
   }
 
+  // If IDNo is provided directly, fetch card immediately
+  if (idNo && !first && !middle && !surname && !mobile) {
+    await fetchCardById(idNo);
+    return;
+  }
+
+  // Hide card viewer, show spinner in results
   document.getElementById('searchCardViewer').style.display = 'none';
   setLoading('btnSearch', true, '🔄 Searching...');
-  showLoader('Searching members...');
   const tbody = document.getElementById('searchTableBody');
-  tbody.innerHTML = '<tr class="loading-row"><td colspan="3"><div class="spinner"></div></td></tr>';
+  tbody.innerHTML = '<tr class="loading-row"><td colspan="5"><div class="spinner"></div></td></tr>';
   document.getElementById('searchResults').style.display = 'block';
+  showLoader('Searching members...');
 
   try {
     const data = await apiCall('searchMembers', { idNo, first, middle, surname, mobile });
     renderSearchResults(data.results || []);
+    // Scroll results into view
     setTimeout(() => {
       document.getElementById('searchResults').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
   } catch(e) {
     toast('Search failed. Check configuration.', 'error');
-    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--red);padding:24px;">Error loading results.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--red);padding:24px;">Error loading results.</td></tr>';
     console.error(e);
   } finally {
     setLoading('btnSearch', false, '🔍 Search');
+    hideLoader();
+  }
+}
+
+async function fetchCardById(idNo) {
+  document.getElementById('searchCardViewer').style.display = 'none';
+  document.getElementById('searchResults').style.display    = 'none';
+  showLoader('Fetching ID Card...');
+  try {
+    const data = await apiCall('getCard', { idNo });
+    if (!data.found) {
+      toast('No member found with ID: ' + idNo, 'error');
+    } else {
+      displayCard(data);
+    }
+  } catch(e) {
+    toast('Error fetching card. Check configuration.', 'error');
+    console.error(e);
+  } finally {
     hideLoader();
   }
 }
@@ -1179,17 +1141,16 @@ function renderSearchResults(rows) {
     '<strong>' + rows.length + '</strong> member' + (rows.length !== 1 ? 's' : '') + ' found';
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="3"><div class="empty-state"><div class="es-icon">🔍</div><p>No members match your search.</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="es-icon">🔍</div><p>No members match your search.</p></div></td></tr>';
     return;
   }
 
   tbody.innerHTML = rows.map(r => `
     <tr>
-      <td style="font-weight:500;">${esc(r.firstName)} ${esc(r.middleName || '')} ${esc(r.surname)}</td>
-      <td>
-        <span class="id-badge">${esc(r.idNo)}</span>
-        <div style="margin-top:4px;font-size:0.8rem;color:var(--gray-500);">${esc(r.mobile)}</div>
-      </td>
+      <td><span class="id-badge">${esc(r.idNo)}</span></td>
+      <td>${esc(r.firstName)} ${esc(r.middleName || '')} ${esc(r.surname)}</td>
+      <td>${esc(r.mobile)}</td>
+      <td><span class="status-badge status-${r.status === 'Active' ? 'active' : 'inactive'}">${esc(r.status)}</span></td>
       <td>
         <button class="btn btn-primary btn-sm btn-view-card"
           style="white-space:nowrap;"
@@ -1202,14 +1163,100 @@ function renderSearchResults(rows) {
 }
 
 function viewCardFromSearch(row) {
-  document.getElementById('searchFormCard').style.display = 'none';
-  document.getElementById('searchResults').style.display  = 'none';
+  // Hide results, show card viewer below
+  document.getElementById('searchResults').style.display = 'none';
   showLoader('Loading ID Card...');
+  // Small delay to let loader appear before image load
   setTimeout(() => {
     displayCard(row);
     hideLoader();
     document.getElementById('searchCardViewer').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, 300);
+}
+
+function displayCard(data) {
+  document.getElementById('cardHolderName').textContent =
+    data.firstName + (data.middleName ? ' ' + data.middleName : '') + ' ' + data.surname;
+
+  const imgSrc = driveImageUrl(data.driveFileId);
+  const container = document.getElementById('cardImgContainer');
+  container.innerHTML = `<img class="id-card-img" src="${imgSrc}" alt="ID Card"
+    onload="hideLoader()"
+    onerror="hideLoader();this.parentElement.innerHTML='<div class=id-card-placeholder><div class=ph-icon>⚠️</div><p>Card image could not be loaded. Check Drive permissions.</p></div>'">`;
+
+  // Download button
+  document.getElementById('btnDownloadCard').onclick = () => {
+    window.open(`https://drive.google.com/uc?export=download&id=${data.driveFileId}`, '_blank');
+  };
+
+  // Share button — uses Web Share API to share image (WhatsApp, Gmail, etc.)
+  document.getElementById('btnShareCard').onclick = async () => {
+    await shareCard(data);
+  };
+
+  document.getElementById('searchCardViewer').style.display = 'block';
+}
+
+async function shareCard(data) {
+  const imgUrl = driveImageUrl(data.driveFileId);
+  const memberName = data.firstName + (data.middleName ? ' ' + data.middleName : '') + ' ' + data.surname;
+  const shareTitle = 'GOA Member ID Card — ' + memberName;
+  const shareText  = 'GOA Member ID: ' + data.idNo + '\n' + memberName;
+
+  // Try Web Share API with image blob (works on Android Chrome, iOS Safari)
+  if (navigator.share) {
+    showLoader('Preparing to share...');
+    try {
+      const response = await fetch(imgUrl);
+      const blob     = await response.blob();
+      const file     = new File([blob], data.idNo + '.jpg', { type: blob.type || 'image/jpeg' });
+
+      // Check if files sharing is supported
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          title : shareTitle,
+          text  : shareText,
+          files : [file],
+        });
+      } else {
+        // Fall back to sharing the Drive link
+        await navigator.share({
+          title : shareTitle,
+          text  : shareText,
+          url   : `https://drive.google.com/file/d/${data.driveFileId}/view`,
+        });
+      }
+    } catch(e) {
+      if (e.name !== 'AbortError') {
+        toast('Could not share. Try Download instead.', 'error');
+        console.error(e);
+      }
+    } finally {
+      hideLoader();
+    }
+  } else {
+    // Desktop fallback — copy Drive link to clipboard
+    try {
+      await navigator.clipboard.writeText(
+        `https://drive.google.com/file/d/${data.driveFileId}/view`
+      );
+      toast('Share link copied to clipboard!', 'success');
+    } catch(e) {
+      toast('Share not supported on this browser. Use Download instead.', 'error');
+    }
+  }
+}
+
+function driveImageUrl(fileId) {
+  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
+}
+
+function closeCardViewer() {
+  document.getElementById('searchCardViewer').style.display = 'none';
+  document.getElementById('searchResults').style.display    = 'block';
+  setTimeout(() => {
+    document.getElementById('searchResults').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 80);
 }
 
 function clearSearch() {
@@ -1218,118 +1265,6 @@ function clearSearch() {
   });
   document.getElementById('searchResults').style.display    = 'none';
   document.getElementById('searchCardViewer').style.display = 'none';
-  document.getElementById('searchFormCard').style.display   = 'block';
-}
-
-/* ══════════════════════════════════════════════════════════════
-   SHARE & COPY
-══════════════════════════════════════════════════════════════ */
-async function shareCard(data) {
-  const memberName = data.firstName + (data.middleName ? ' ' + data.middleName : '') + ' ' + data.surname;
-  const shareTitle = 'GOA Member ID Card — ' + memberName;
-  const shareText  = 'GOA Member ID: ' + data.idNo + ', ' + memberName;
-  const driveLink  = `https://drive.google.com/file/d/${data.driveFileId}/view`;
-
-  // Remove existing panel (toggle behaviour)
-  const existing = document.getElementById('sharePanel');
-  if (existing) { existing.remove(); return; }
-
-  if (navigator.share) {
-    // ── Mobile: native share sheet ──────────────────────────────────────────
-    showLoader('Preparing to share...');
-    let shared = false;
-    try {
-      // Attempt 1: share as actual image file via canvas
-      const blob = await getCardBlob();
-      const file = new File([blob], data.idNo + '.jpg', { type: 'image/jpeg' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ title: shareTitle, text: shareText, files: [file] });
-        shared = true;
-      }
-    } catch(e) {
-      console.warn('Image share failed, falling back to link share:', e.message);
-    }
-    // Attempt 2: share link (still opens WhatsApp/Gmail on mobile)
-    if (!shared) {
-      try {
-        await navigator.share({ title: shareTitle, text: shareText, url: driveLink });
-        shared = true;
-      } catch(e2) {
-        if (e2.name !== 'AbortError') showSharePanel(data.idNo, driveLink, shareText);
-      }
-    }
-    hideLoader();
-  } else {
-    // ── Desktop: show inline share panel ────────────────────────────────────
-    showSharePanel(data.idNo, driveLink, shareText);
-  }
-}
-
-function showSharePanel(idNo, driveLink, shareText) {
-  const waText   = encodeURIComponent(shareText + '\n' + driveLink);
-  const gmailUrl = 'https://mail.google.com/mail/?view=cm&su='
-    + encodeURIComponent('GOA Member ID Card')
-    + '&body=' + encodeURIComponent(shareText + '\n' + driveLink);
-
-  const panel = document.createElement('div');
-  panel.id = 'sharePanel';
-  panel.className = 'share-panel';
-  panel.innerHTML = `
-    <span class="share-panel-label">Share via:</span>
-    <a class="share-btn-wa" href="https://wa.me/?text=${waText}" target="_blank" rel="noopener">📱 WhatsApp</a>
-    <a class="share-btn-gm" href="${gmailUrl}" target="_blank" rel="noopener">✉️ Gmail</a>
-    <button class="share-btn-copy" onclick="copyShareLink('${driveLink}')">🔗 Copy Link</button>
-    <button class="share-btn-close" onclick="document.getElementById('sharePanel').remove()">✕</button>
-  `;
-  const actions = document.getElementById('cardActionBar');
-  actions.insertAdjacentElement('afterend', panel);
-}
-
-async function copyShareLink(url) {
-  try {
-    await navigator.clipboard.writeText(url);
-    toast('Link copied to clipboard!', 'success');
-  } catch(e) {
-    toast('Could not copy. Please copy the link manually.', 'error');
-  }
-}
-
-/* ── COPY IMAGE TO CLIPBOARD ────────────────────────────────────────────────
-   Uses canvas → ClipboardItem API (Chrome 76+, Safari 13.1+)               */
-async function copyCardImage(data) {
-  showLoader('Copying image...');
-  try {
-    const blob = await getCardBlob();
-    if (typeof ClipboardItem !== 'undefined') {
-      await navigator.clipboard.write([
-        new ClipboardItem({ 'image/png': blob })
-      ]);
-      toast('✅ Card image copied to clipboard!', 'success');
-    } else {
-      // Fallback: copy the Drive link
-      await navigator.clipboard.writeText(
-        `https://drive.google.com/file/d/${data.driveFileId}/view`
-      );
-      toast('Image copy not supported here — Drive link copied instead.', 'info');
-    }
-  } catch(e) {
-    if (e.name === 'NotAllowedError') {
-      toast('Clipboard access denied. Please allow clipboard permissions.', 'error');
-    } else {
-      // Canvas tainted (CORS) — copy Drive link as fallback
-      try {
-        await navigator.clipboard.writeText(
-          `https://drive.google.com/file/d/${data.driveFileId}/view`
-        );
-        toast('Image copy unavailable — Drive link copied instead.', 'info');
-      } catch(e2) {
-        toast('Could not copy. Use Download instead.', 'error');
-      }
-    }
-    console.warn('copyCardImage error:', e);
-  } finally {
-    hideLoader();
-  }
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -1431,6 +1366,7 @@ async function saveMember() {
   }
 
   setLoading('btnSaveMember', true, '💾 Saving...');
+  showLoader('Saving member...');
   const payload = {
     idNo, firstName: first,
     middleName : document.getElementById('mMiddle').value.trim(),
@@ -1457,6 +1393,7 @@ async function saveMember() {
     console.error(e);
   } finally {
     setLoading('btnSaveMember', false, '💾 Save Member');
+    hideLoader();
   }
 }
 
