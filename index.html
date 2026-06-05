@@ -722,10 +722,8 @@
             <table>
               <thead>
                 <tr>
-                  <th>ID No</th>
-                  <th>Full Name</th>
-                  <th>Mobile</th>
-                  <th>Status</th>
+                  <th>Name</th>
+                  <th>ID No / Mobile</th>
                   <th>Action</th>
                 </tr>
               </thead>
@@ -746,6 +744,7 @@
             </div>
           </div>
           <div class="card-actions" style="margin-top:20px;">
+            <button class="btn btn-outline" id="btnCopyCard">📋 Copy</button>
             <button class="btn btn-outline btn-share" id="btnShareCard" style="background:var(--navy);color:var(--gold);border-color:var(--navy);">
               📤 Share
             </button>
@@ -1095,7 +1094,7 @@ async function doSearch() {
   document.getElementById('searchCardViewer').style.display = 'none';
   setLoading('btnSearch', true, '🔄 Searching...');
   const tbody = document.getElementById('searchTableBody');
-  tbody.innerHTML = '<tr class="loading-row"><td colspan="5"><div class="spinner"></div></td></tr>';
+  tbody.innerHTML = '<tr class="loading-row"><td colspan="3"><div class="spinner"></div></td></tr>';
   document.getElementById('searchResults').style.display = 'block';
   showLoader('Searching members...');
 
@@ -1108,7 +1107,7 @@ async function doSearch() {
     }, 100);
   } catch(e) {
     toast('Search failed. Check configuration.', 'error');
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--red);padding:24px;">Error loading results.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--red);padding:24px;">Error loading results.</td></tr>';
     console.error(e);
   } finally {
     setLoading('btnSearch', false, '🔍 Search');
@@ -1141,16 +1140,20 @@ function renderSearchResults(rows) {
     '<strong>' + rows.length + '</strong> member' + (rows.length !== 1 ? 's' : '') + ' found';
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="es-icon">🔍</div><p>No members match your search.</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="3"><div class="empty-state"><div class="es-icon">🔍</div><p>No members match your search.</p></div></td></tr>';
     return;
   }
 
-  tbody.innerHTML = rows.map(r => `
-    <tr>
-      <td><span class="id-badge">${esc(r.idNo)}</span></td>
-      <td>${esc(r.firstName)} ${esc(r.middleName || '')} ${esc(r.surname)}</td>
-      <td>${esc(r.mobile)}</td>
-      <td><span class="status-badge status-${r.status === 'Active' ? 'active' : 'inactive'}">${esc(r.status)}</span></td>
+  tbody.innerHTML = rows.map(r => {
+    const inactive = r.status !== 'Active';
+    const rowStyle = inactive ? 'outline: 2px solid var(--red); outline-offset: -2px;' : '';
+    return `
+    <tr style="${rowStyle}">
+      <td><strong>${esc(r.firstName)} ${esc(r.middleName || '')} ${esc(r.surname)}</strong></td>
+      <td>
+        <div style="font-weight:700;color:#000;">${esc(r.idNo)}</div>
+        <div style="font-size:0.82rem;color:var(--gray-500);margin-top:2px;">${esc(r.mobile)}</div>
+      </td>
       <td>
         <button class="btn btn-primary btn-sm btn-view-card"
           style="white-space:nowrap;"
@@ -1158,8 +1161,8 @@ function renderSearchResults(rows) {
           🪪 View Card
         </button>
       </td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 }
 
 function viewCardFromSearch(row) {
@@ -1187,6 +1190,11 @@ function displayCard(data) {
   // Download button
   document.getElementById('btnDownloadCard').onclick = () => {
     window.open(`https://drive.google.com/uc?export=download&id=${data.driveFileId}`, '_blank');
+  };
+
+  // Copy button — copies image to clipboard
+  document.getElementById('btnCopyCard').onclick = async () => {
+    await copyCard(data);
   };
 
   // Share button — uses Web Share API to share image (WhatsApp, Gmail, etc.)
@@ -1249,6 +1257,43 @@ async function shareCard(data) {
 
 function driveImageUrl(fileId) {
   return `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
+}
+
+async function copyCard(data) {
+  if (!navigator.clipboard || !window.ClipboardItem) {
+    toast('Copy to clipboard is not supported on this browser.', 'error');
+    return;
+  }
+  showLoader('Copying image...');
+  try {
+    const response = await fetch(driveImageUrl(data.driveFileId));
+    const blob     = await response.blob();
+    const pngBlob  = blob.type === 'image/png' ? blob : await convertToPng(blob);
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+    toast('Image copied to clipboard!', 'success');
+  } catch(e) {
+    toast('Could not copy image. Try downloading instead.', 'error');
+    console.error(e);
+  } finally {
+    hideLoader();
+  }
+}
+
+async function convertToPng(blob) {
+  return new Promise((resolve, reject) => {
+    const img    = new Image();
+    const url    = URL.createObjectURL(blob);
+    img.onload   = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width  = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas toBlob failed')), 'image/png');
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image load failed')); };
+    img.src = url;
+  });
 }
 
 function closeCardViewer() {
