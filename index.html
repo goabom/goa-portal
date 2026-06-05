@@ -899,6 +899,7 @@ let appState = {
   idToken: null,
   adminData: [],
   adminDataFiltered: [],
+  searchResults: [],
 };
 
 /* ══════════════════════════════════════════════════════════════
@@ -1135,6 +1136,7 @@ async function fetchCardById(idNo) {
 }
 
 function renderSearchResults(rows) {
+  appState.searchResults = rows;
   const tbody = document.getElementById('searchTableBody');
   document.getElementById('resultsCount').innerHTML =
     '<strong>' + rows.length + '</strong> member' + (rows.length !== 1 ? 's' : '') + ' found';
@@ -1144,7 +1146,7 @@ function renderSearchResults(rows) {
     return;
   }
 
-  tbody.innerHTML = rows.map(r => {
+  tbody.innerHTML = rows.map((r, idx) => {
     const inactive = r.status !== 'Active';
     const rowStyle = inactive ? 'outline: 2px solid var(--red); outline-offset: -2px;' : '';
     return `
@@ -1157,7 +1159,7 @@ function renderSearchResults(rows) {
       <td>
         <button class="btn btn-primary btn-sm btn-view-card"
           style="white-space:nowrap;"
-          onclick='viewCardFromSearch(${JSON.stringify(r)})'>
+          onclick="viewCardFromSearch(${idx})">
           🪪 View Card
         </button>
       </td>
@@ -1165,27 +1167,53 @@ function renderSearchResults(rows) {
   }).join('');
 }
 
-function viewCardFromSearch(row) {
-  // Hide results, show card viewer below
+function viewCardFromSearch(idx) {
+  const row = appState.searchResults[idx];
   document.getElementById('searchResults').style.display = 'none';
-  showLoader('Loading ID Card...');
-  // Small delay to let loader appear before image load
-  setTimeout(() => {
-    displayCard(row);
-    hideLoader();
-    document.getElementById('searchCardViewer').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, 300);
+  displayCard(row);
+}
+
+function scrollToShowCard() {
+  const viewer  = document.getElementById('searchCardViewer');
+  const HEADER  = 68;   // sticky header height (px)
+  const PAD     = 12;   // breathing room (px)
+  const availH  = window.innerHeight - HEADER - PAD;
+  const viewerH = viewer.offsetHeight;
+  const rawTop  = viewer.getBoundingClientRect().top + window.scrollY;
+
+  let scrollTo;
+  if (viewerH <= availH) {
+    // Card fits: centre it in the space below the header
+    scrollTo = rawTop - HEADER - Math.floor((availH - viewerH) / 2);
+  } else {
+    // Card taller than viewport: align top just below header
+    scrollTo = rawTop - HEADER - PAD;
+  }
+  window.scrollTo({ top: Math.max(0, scrollTo), behavior: 'smooth' });
 }
 
 function displayCard(data) {
   document.getElementById('cardHolderName').textContent =
     data.firstName + (data.middleName ? ' ' + data.middleName : '') + ' ' + data.surname;
 
-  const imgSrc = driveImageUrl(data.driveFileId);
+  const imgSrc    = driveImageUrl(data.driveFileId);
   const container = document.getElementById('cardImgContainer');
-  container.innerHTML = `<img class="id-card-img" src="${imgSrc}" alt="ID Card"
-    onload="hideLoader()"
-    onerror="hideLoader();this.parentElement.innerHTML='<div class=id-card-placeholder><div class=ph-icon>⚠️</div><p>Card image could not be loaded. Check Drive permissions.</p></div>'">`;
+  container.innerHTML = '';
+
+  const img    = document.createElement('img');
+  img.className = 'id-card-img';
+  img.alt       = 'ID Card';
+  img.onload = () => {
+    hideLoader();
+    scrollToShowCard();
+  };
+  img.onerror = () => {
+    hideLoader();
+    container.innerHTML = '<div class="id-card-placeholder"><div class="ph-icon">⚠️</div><p>Card image could not be loaded. Check Drive permissions.</p></div>';
+    scrollToShowCard();
+  };
+  img.src = imgSrc;
+  container.appendChild(img);
 
   // Download button
   document.getElementById('btnDownloadCard').onclick = () => {
@@ -1266,9 +1294,13 @@ async function copyCard(data) {
   }
   showLoader('Copying image...');
   try {
-    const response = await fetch(driveImageUrl(data.driveFileId));
-    const blob     = await response.blob();
-    const pngBlob  = blob.type === 'image/png' ? blob : await convertToPng(blob);
+    const result = await apiCall('getCardImage', { fileId: data.driveFileId });
+    if (result.error) throw new Error(result.error);
+    const byteChars = atob(result.base64);
+    const byteArray = new Uint8Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
+    const blob    = new Blob([byteArray], { type: result.mimeType || 'image/jpeg' });
+    const pngBlob = result.mimeType === 'image/png' ? blob : await convertToPng(blob);
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
     toast('Image copied to clipboard!', 'success');
   } catch(e) {
