@@ -1171,22 +1171,49 @@ function viewCardFromSearch(idx) {
   const row = appState.searchResults[idx];
   document.getElementById('searchResults').style.display = 'none';
   displayCard(row);
-  const viewer = document.getElementById('searchCardViewer');
-  setTimeout(() => {
-    const top = viewer.getBoundingClientRect().top + window.scrollY - 80;
-    window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
-  }, 50);
+}
+
+function scrollToShowCard() {
+  const viewer  = document.getElementById('searchCardViewer');
+  const HEADER  = 68;   // sticky header height (px)
+  const PAD     = 12;   // breathing room (px)
+  const availH  = window.innerHeight - HEADER - PAD;
+  const viewerH = viewer.offsetHeight;
+  const rawTop  = viewer.getBoundingClientRect().top + window.scrollY;
+
+  let scrollTo;
+  if (viewerH <= availH) {
+    // Card fits: centre it in the space below the header
+    scrollTo = rawTop - HEADER - Math.floor((availH - viewerH) / 2);
+  } else {
+    // Card taller than viewport: align top just below header
+    scrollTo = rawTop - HEADER - PAD;
+  }
+  window.scrollTo({ top: Math.max(0, scrollTo), behavior: 'smooth' });
 }
 
 function displayCard(data) {
   document.getElementById('cardHolderName').textContent =
     data.firstName + (data.middleName ? ' ' + data.middleName : '') + ' ' + data.surname;
 
-  const imgSrc = driveImageUrl(data.driveFileId);
+  const imgSrc    = driveImageUrl(data.driveFileId);
   const container = document.getElementById('cardImgContainer');
-  container.innerHTML = `<img class="id-card-img" src="${imgSrc}" alt="ID Card"
-    onload="hideLoader()"
-    onerror="hideLoader();this.parentElement.innerHTML='<div class=id-card-placeholder><div class=ph-icon>⚠️</div><p>Card image could not be loaded. Check Drive permissions.</p></div>'">`;
+  container.innerHTML = '';
+
+  const img    = document.createElement('img');
+  img.className = 'id-card-img';
+  img.alt       = 'ID Card';
+  img.onload = () => {
+    hideLoader();
+    scrollToShowCard();
+  };
+  img.onerror = () => {
+    hideLoader();
+    container.innerHTML = '<div class="id-card-placeholder"><div class="ph-icon">⚠️</div><p>Card image could not be loaded. Check Drive permissions.</p></div>';
+    scrollToShowCard();
+  };
+  img.src = imgSrc;
+  container.appendChild(img);
 
   // Download button
   document.getElementById('btnDownloadCard').onclick = () => {
@@ -1207,51 +1234,48 @@ function displayCard(data) {
 }
 
 async function shareCard(data) {
-  const imgUrl = driveImageUrl(data.driveFileId);
+  // Change 3 — guard missing file ID
+  if (!data.driveFileId) {
+    toast('No card image on file for this member.', 'error');
+    return;
+  }
   const memberName = data.firstName + (data.middleName ? ' ' + data.middleName : '') + ' ' + data.surname;
   const shareTitle = 'GOA Member ID Card — ' + memberName;
   const shareText  = 'GOA Member ID: ' + data.idNo + '\n' + memberName;
+  const driveLink  = `https://drive.google.com/file/d/${data.driveFileId}/view`;
 
-  // Try Web Share API with image blob (works on Android Chrome, iOS Safari)
+  // Mobile — Web Share API
   if (navigator.share) {
     showLoader('Preparing to share...');
     try {
-      const response = await fetch(imgUrl);
-      const blob     = await response.blob();
-      const file     = new File([blob], data.idNo + '.jpg', { type: blob.type || 'image/jpeg' });
+      const result    = await apiCall('getCardImage', { fileId: data.driveFileId });
+      if (result.error) throw new Error('Backend: ' + result.error);
+      const byteChars = atob(result.base64);
+      const byteArray = new Uint8Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
+      const blob = new Blob([byteArray], { type: result.mimeType || 'image/jpeg' });
+      const file = new File([blob], data.idNo + '.jpg', { type: blob.type || 'image/jpeg' });
 
-      // Check if files sharing is supported
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          title : shareTitle,
-          text  : shareText,
-          files : [file],
-        });
+        await navigator.share({ title: shareTitle, text: shareText, files: [file] });
       } else {
-        // Fall back to sharing the Drive link
-        await navigator.share({
-          title : shareTitle,
-          text  : shareText,
-          url   : `https://drive.google.com/file/d/${data.driveFileId}/view`,
-        });
+        await navigator.share({ title: shareTitle, text: shareText, url: driveLink });
       }
     } catch(e) {
-      if (e.name !== 'AbortError') {
-        toast('Could not share. Try Download instead.', 'error');
-        console.error(e);
-      }
+      if (e.name === 'AbortError') return; // user cancelled — not an error
+      // Change 1 — show real error text
+      toast('Share failed: ' + e.message, 'error');
+      console.error('shareCard error:', e);
     } finally {
       hideLoader();
     }
   } else {
-    // Desktop fallback — copy Drive link to clipboard
+    // Desktop — copy Drive link to clipboard
     try {
-      await navigator.clipboard.writeText(
-        `https://drive.google.com/file/d/${data.driveFileId}/view`
-      );
-      toast('Share link copied to clipboard!', 'success');
+      await navigator.clipboard.writeText(driveLink);
+      toast('Drive link copied to clipboard!', 'success');
     } catch(e) {
-      toast('Share not supported on this browser. Use Download instead.', 'error');
+      toast('Share failed: ' + e.message, 'error');
     }
   }
 }
@@ -1261,24 +1285,41 @@ function driveImageUrl(fileId) {
 }
 
 async function copyCard(data) {
+  // Change 3 — guard missing file ID
+  if (!data.driveFileId) {
+    toast('No card image on file for this member.', 'error');
+    return;
+  }
   if (!navigator.clipboard || !window.ClipboardItem) {
-    toast('Copy to clipboard is not supported on this browser.', 'error');
+    toast('Clipboard API not supported on this browser.', 'error');
     return;
   }
   showLoader('Copying image...');
   try {
+    // Fetch image via Apps Script backend (avoids CORS)
     const result = await apiCall('getCardImage', { fileId: data.driveFileId });
-    if (result.error) throw new Error(result.error);
+    if (result.error) throw new Error('Backend: ' + result.error);
     const byteChars = atob(result.base64);
     const byteArray = new Uint8Array(byteChars.length);
     for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
     const blob    = new Blob([byteArray], { type: result.mimeType || 'image/jpeg' });
     const pngBlob = result.mimeType === 'image/png' ? blob : await convertToPng(blob);
-    await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
-    toast('Image copied to clipboard!', 'success');
+    try {
+      // Change 1 — attempt clipboard write
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+      toast('Image copied to clipboard!', 'success');
+    } catch(clipErr) {
+      // Change 2 — fallback: open image in new tab so user can copy manually
+      console.warn('Clipboard write failed:', clipErr.message);
+      const blobUrl = URL.createObjectURL(pngBlob);
+      window.open(blobUrl, '_blank');
+      toast('Clipboard blocked — image opened in new tab. Long-press or right-click to copy.', 'success');
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    }
   } catch(e) {
-    toast('Could not copy image. Try downloading instead.', 'error');
-    console.error(e);
+    // Change 1 — show real error text
+    toast('Copy failed: ' + e.message, 'error');
+    console.error('copyCard error:', e);
   } finally {
     hideLoader();
   }
