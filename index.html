@@ -413,7 +413,8 @@
     display: block;
     margin: 0 auto 20px;
   }
-  .card-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .card-actions { display: flex; gap: 6px; justify-content: center; flex-wrap: nowrap; }
+  .card-actions .btn { padding: 8px 10px; font-size: 0.8rem; gap: 4px; }
   .id-card-placeholder {
     background: var(--gray-100);
     border: 2px dashed var(--gray-300);
@@ -596,6 +597,8 @@
     thead th, tbody td { padding: 9px 10px; }
     .btn { padding: 10px 16px; }
     .btn-view-card { display: inline-flex !important; min-width: 90px; }
+    /* Cap image height so card + buttons always fit in one screen */
+    .id-card-img { max-height: calc(100vh - 230px); }
   }
     gap: 16px;
 </style>
@@ -678,7 +681,7 @@
     <div id="pane-search">
       <div class="card">
         <div class="card-title">Search Members</div>
-        <div class="card-desc">Search by Member ID, Name, or Mobile Number. Partial matches supported.</div>
+        <div class="card-desc">Search by Member ID, Name, Mobile Number or Place. Partial matches supported.</div>
         <div class="form-row">
           <div class="form-group">
             <label>Member ID No</label>
@@ -704,6 +707,10 @@
             <label>Mobile Number</label>
             <input type="tel" id="srchMobile" placeholder="e.g. 9876543210">
           </div>
+          <div class="form-group">
+            <label>Place</label>
+            <input type="text" id="srchPlace" placeholder="e.g. Margao" onkeydown="if(event.key==='Enter') doSearch()">
+          </div>
         </div>
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
           <button class="btn btn-primary" onclick="doSearch()" id="btnSearch">🔍 Search</button>
@@ -723,7 +730,7 @@
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th>ID No / Mobile</th>
+                  <th>Place / Mobile</th>
                   <th>Action</th>
                 </tr>
               </thead>
@@ -1079,8 +1086,9 @@ async function doSearch() {
   const middle  = document.getElementById('srchMiddle').value.trim();
   const surname = document.getElementById('srchSurname').value.trim();
   const mobile  = document.getElementById('srchMobile').value.trim();
+  const place   = document.getElementById('srchPlace').value.trim();
 
-  if (!idNo && !first && !middle && !surname && !mobile) {
+  if (!idNo && !first && !middle && !surname && !mobile && !place) {
     toast('Please enter at least one search field.', 'error');
     return;
   }
@@ -1100,7 +1108,7 @@ async function doSearch() {
   showLoader('Searching members...');
 
   try {
-    const data = await apiCall('searchMembers', { idNo, first, middle, surname, mobile });
+    const data = await apiCall('searchMembers', { idNo, first, middle, surname, mobile, place });
     renderSearchResults(data.results || []);
     // Scroll results into view
     setTimeout(() => {
@@ -1153,7 +1161,7 @@ function renderSearchResults(rows) {
     <tr style="${rowStyle}">
       <td><strong>${esc(r.firstName)} ${esc(r.middleName || '')} ${esc(r.surname)}</strong></td>
       <td>
-        <div style="font-weight:700;color:#000;">${esc(r.idNo)}</div>
+        <div style="font-weight:700;color:#000;">${esc(r.place || '—')}</div>
         <div style="font-size:0.82rem;color:var(--gray-500);margin-top:2px;">${esc(r.mobile)}</div>
       </td>
       <td>
@@ -1192,49 +1200,60 @@ function scrollToShowCard() {
   window.scrollTo({ top: Math.max(0, scrollTo), behavior: 'smooth' });
 }
 
-function displayCard(data) {
+async function displayCard(data) {
   document.getElementById('cardHolderName').textContent =
     data.firstName + (data.middleName ? ' ' + data.middleName : '') + ' ' + data.surname;
 
-  const imgSrc    = driveImageUrl(data.driveFileId);
   const container = document.getElementById('cardImgContainer');
-  container.innerHTML = '';
+  // Show viewer immediately with a loading placeholder
+  container.innerHTML = '<div class="id-card-placeholder"><div class="ph-icon">🪪</div><p>Loading card...</p></div>';
+  document.getElementById('searchCardViewer').style.display = 'block';
+  showLoader('Loading card...');
 
-  const img    = document.createElement('img');
-  img.className = 'id-card-img';
-  img.alt       = 'ID Card';
-  img.onload = () => {
+  // Revoke any blob URL from a previously viewed card
+  if (data._blobUrl) { URL.revokeObjectURL(data._blobUrl); delete data._blobUrl; }
+
+  try {
+    // Fetch image through Apps Script backend — works on all browsers (no cookie dependency)
+    data._blob    = await fetchImageBlob(data.driveFileId);
+    data._blobUrl = URL.createObjectURL(data._blob);
+
+    const img     = document.createElement('img');
+    img.className = 'id-card-img';
+    img.alt       = 'ID Card';
+    img.onload  = () => { hideLoader(); scrollToShowCard(); };
+    img.onerror = () => {
+      hideLoader();
+      container.innerHTML = '<div class="id-card-placeholder"><div class="ph-icon">⚠️</div><p>Card image could not be loaded.</p></div>';
+      scrollToShowCard();
+    };
+    container.innerHTML = '';
+    container.appendChild(img);
+    img.src = data._blobUrl;   // set src after appending so onload fires reliably
+
+  } catch(e) {
     hideLoader();
+    container.innerHTML = `<div class="id-card-placeholder"><div class="ph-icon">⚠️</div><p>Could not load card: ${esc(e.message)}</p></div>`;
     scrollToShowCard();
-  };
-  img.onerror = () => {
-    hideLoader();
-    container.innerHTML = '<div class="id-card-placeholder"><div class="ph-icon">⚠️</div><p>Card image could not be loaded. Check Drive permissions.</p></div>';
-    scrollToShowCard();
-  };
-  img.src = imgSrc;
-  container.appendChild(img);
+  }
 
   // Download button
   document.getElementById('btnDownloadCard').onclick = () => {
     window.open(`https://drive.google.com/uc?export=download&id=${data.driveFileId}`, '_blank');
   };
 
-  // Copy button — copies image to clipboard
+  // Copy button
   document.getElementById('btnCopyCard').onclick = async () => {
     await copyCard(data);
   };
 
-  // Share button — uses Web Share API to share image (WhatsApp, Gmail, etc.)
+  // Share button
   document.getElementById('btnShareCard').onclick = async () => {
     await shareCard(data);
   };
-
-  document.getElementById('searchCardViewer').style.display = 'block';
 }
 
 async function shareCard(data) {
-  // Change 3 — guard missing file ID
   if (!data.driveFileId) {
     toast('No card image on file for this member.', 'error');
     return;
@@ -1244,16 +1263,11 @@ async function shareCard(data) {
   const shareText  = 'GOA Member ID: ' + data.idNo + '\n' + memberName;
   const driveLink  = `https://drive.google.com/file/d/${data.driveFileId}/view`;
 
-  // Mobile — Web Share API
   if (navigator.share) {
     showLoader('Preparing to share...');
     try {
-      const result    = await apiCall('getCardImage', { fileId: data.driveFileId });
-      if (result.error) throw new Error('Backend: ' + result.error);
-      const byteChars = atob(result.base64);
-      const byteArray = new Uint8Array(byteChars.length);
-      for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
-      const blob = new Blob([byteArray], { type: result.mimeType || 'image/jpeg' });
+      // Reuse blob already fetched when card was displayed; fetch only if missing
+      const blob = data._blob || await fetchImageBlob(data.driveFileId);
       const file = new File([blob], data.idNo + '.jpg', { type: blob.type || 'image/jpeg' });
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -1262,8 +1276,7 @@ async function shareCard(data) {
         await navigator.share({ title: shareTitle, text: shareText, url: driveLink });
       }
     } catch(e) {
-      if (e.name === 'AbortError') return; // user cancelled — not an error
-      // Change 1 — show real error text
+      if (e.name === 'AbortError') return;
       toast('Share failed: ' + e.message, 'error');
       console.error('shareCard error:', e);
     } finally {
@@ -1280,12 +1293,21 @@ async function shareCard(data) {
   }
 }
 
+// Shared helper — fetch image from Apps Script backend and return a Blob
+async function fetchImageBlob(fileId) {
+  const result = await apiCall('getCardImage', { fileId });
+  if (result.error) throw new Error('Backend: ' + result.error);
+  const byteChars = atob(result.base64);
+  const byteArray = new Uint8Array(byteChars.length);
+  for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
+  return new Blob([byteArray], { type: result.mimeType || 'image/jpeg' });
+}
+
 function driveImageUrl(fileId) {
   return `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
 }
 
 async function copyCard(data) {
-  // Change 3 — guard missing file ID
   if (!data.driveFileId) {
     toast('No card image on file for this member.', 'error');
     return;
@@ -1296,20 +1318,14 @@ async function copyCard(data) {
   }
   showLoader('Copying image...');
   try {
-    // Fetch image via Apps Script backend (avoids CORS)
-    const result = await apiCall('getCardImage', { fileId: data.driveFileId });
-    if (result.error) throw new Error('Backend: ' + result.error);
-    const byteChars = atob(result.base64);
-    const byteArray = new Uint8Array(byteChars.length);
-    for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
-    const blob    = new Blob([byteArray], { type: result.mimeType || 'image/jpeg' });
-    const pngBlob = result.mimeType === 'image/png' ? blob : await convertToPng(blob);
+    // Reuse blob already fetched when card was displayed; fetch only if missing
+    const blob    = data._blob || await fetchImageBlob(data.driveFileId);
+    const pngBlob = (blob.type === 'image/png') ? blob : await convertToPng(blob);
     try {
-      // Change 1 — attempt clipboard write
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
       toast('Image copied to clipboard!', 'success');
     } catch(clipErr) {
-      // Change 2 — fallback: open image in new tab so user can copy manually
+      // Fallback: open image in new tab so user can copy manually
       console.warn('Clipboard write failed:', clipErr.message);
       const blobUrl = URL.createObjectURL(pngBlob);
       window.open(blobUrl, '_blank');
@@ -1317,7 +1333,6 @@ async function copyCard(data) {
       setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
     }
   } catch(e) {
-    // Change 1 — show real error text
     toast('Copy failed: ' + e.message, 'error');
     console.error('copyCard error:', e);
   } finally {
@@ -1343,6 +1358,10 @@ async function convertToPng(blob) {
 }
 
 function closeCardViewer() {
+  // Free memory: revoke blob URL of the card that was being viewed
+  const currentResult = appState.searchResults.find(r => r._blobUrl);
+  if (currentResult) { URL.revokeObjectURL(currentResult._blobUrl); delete currentResult._blobUrl; delete currentResult._blob; }
+
   document.getElementById('searchCardViewer').style.display = 'none';
   document.getElementById('searchResults').style.display    = 'block';
   setTimeout(() => {
@@ -1351,7 +1370,7 @@ function closeCardViewer() {
 }
 
 function clearSearch() {
-  ['srchIdNo','srchFirst','srchMiddle','srchSurname','srchMobile'].forEach(id => {
+  ['srchIdNo','srchFirst','srchMiddle','srchSurname','srchMobile','srchPlace'].forEach(id => {
     document.getElementById(id).value = '';
   });
   document.getElementById('searchResults').style.display    = 'none';
