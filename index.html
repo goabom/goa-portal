@@ -413,7 +413,8 @@
     display: block;
     margin: 0 auto 20px;
   }
-  .card-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .card-actions { display: flex; gap: 6px; justify-content: center; flex-wrap: nowrap; }
+  .card-actions .btn { padding: 8px 10px; font-size: 0.8rem; gap: 4px; }
   .id-card-placeholder {
     background: var(--gray-100);
     border: 2px dashed var(--gray-300);
@@ -596,6 +597,8 @@
     thead th, tbody td { padding: 9px 10px; }
     .btn { padding: 10px 16px; }
     .btn-view-card { display: inline-flex !important; min-width: 90px; }
+    /* Cap image height so card + buttons always fit in one screen */
+    .id-card-img { max-height: calc(100vh - 230px); }
   }
     gap: 16px;
 </style>
@@ -678,7 +681,7 @@
     <div id="pane-search">
       <div class="card">
         <div class="card-title">Search Members</div>
-        <div class="card-desc">Search by Member ID, Name, or Mobile Number. Partial matches supported.</div>
+        <div class="card-desc">Search by Member ID, Name, Mobile Number or Place. Partial matches supported.</div>
         <div class="form-row">
           <div class="form-group">
             <label>Member ID No</label>
@@ -695,7 +698,7 @@
             <input type="text" id="srchMiddle" placeholder="e.g. Grace">
           </div>
           <div class="form-group">
-            <label>Surname</label>
+            <label>Last Name</label>
             <input type="text" id="srchSurname" placeholder="e.g. Fernandes">
           </div>
         </div>
@@ -703,6 +706,10 @@
           <div class="form-group">
             <label>Mobile Number</label>
             <input type="tel" id="srchMobile" placeholder="e.g. 9876543210">
+          </div>
+          <div class="form-group">
+            <label>Place</label>
+            <input type="text" id="srchPlace" placeholder="e.g. Mulund" onkeydown="if(event.key==='Enter') doSearch()">
           </div>
         </div>
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
@@ -723,7 +730,7 @@
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th>ID No / Mobile</th>
+                  <th>Place / Mobile</th>
                   <th>Action</th>
                 </tr>
               </thead>
@@ -832,8 +839,8 @@
       </div>
       <div class="form-row">
         <div class="form-group full">
-          <label>Surname *</label>
-          <input type="text" id="mSurname" placeholder="Surname">
+          <label>Last Name *</label>
+          <input type="text" id="mSurname" placeholder="Last Name">
         </div>
       </div>
       <div class="form-row">
@@ -1079,8 +1086,9 @@ async function doSearch() {
   const middle  = document.getElementById('srchMiddle').value.trim();
   const surname = document.getElementById('srchSurname').value.trim();
   const mobile  = document.getElementById('srchMobile').value.trim();
+  const place   = document.getElementById('srchPlace').value.trim();
 
-  if (!idNo && !first && !middle && !surname && !mobile) {
+  if (!idNo && !first && !middle && !surname && !mobile && !place) {
     toast('Please enter at least one search field.', 'error');
     return;
   }
@@ -1100,7 +1108,7 @@ async function doSearch() {
   showLoader('Searching members...');
 
   try {
-    const data = await apiCall('searchMembers', { idNo, first, middle, surname, mobile });
+    const data = await apiCall('searchMembers', { idNo, first, middle, surname, mobile, place });
     renderSearchResults(data.results || []);
     // Scroll results into view
     setTimeout(() => {
@@ -1153,14 +1161,14 @@ function renderSearchResults(rows) {
     <tr style="${rowStyle}">
       <td><strong>${esc(r.firstName)} ${esc(r.middleName || '')} ${esc(r.surname)}</strong></td>
       <td>
-        <div style="font-weight:700;color:#000;">${esc(r.idNo)}</div>
-        <div style="font-size:0.82rem;color:var(--gray-500);margin-top:2px;">${esc(r.mobile)}</div>
+        <div style="font-weight:700;color:#000;">${esc(r.place || '—')}</div>
+        <div style="font-size:0.82rem;color:#1a6fb5;font-weight:700;margin-top:2px;">${esc(r.mobile)}</div>
       </td>
       <td>
         <button class="btn btn-primary btn-sm btn-view-card"
           style="white-space:nowrap;"
           onclick="viewCardFromSearch(${idx})">
-          🪪 View Card
+          🪪 ${esc(r.idNo)}
         </button>
       </td>
     </tr>`;
@@ -1362,7 +1370,7 @@ function closeCardViewer() {
 }
 
 function clearSearch() {
-  ['srchIdNo','srchFirst','srchMiddle','srchSurname','srchMobile'].forEach(id => {
+  ['srchIdNo','srchFirst','srchMiddle','srchSurname','srchMobile','srchPlace'].forEach(id => {
     document.getElementById(id).value = '';
   });
   document.getElementById('searchResults').style.display    = 'none';
